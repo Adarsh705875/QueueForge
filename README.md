@@ -1,135 +1,313 @@
-# QueueForge
+ <div align="center">
 
-QueueForge is a Java 21 / Spring Boot background-job processing service. It stores jobs durably in PostgreSQL, executes them with a concurrent worker pool, uses leases and heartbeats for crash recovery, applies Redis-backed token-bucket rate limiting to job submission, and exposes operational metrics.
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0D47A1,50:1565C0,100:42A5F5&height=220&section=header&text=QueueForge&fontSize=52&fontColor=ffffff&animation=fadeIn&fontAlignY=38&desc=Distributed%20Background%20Job%20Processing%20System&descAlignY=58&descSize=18" width="100%" />
 
-> **Production status:** This repository is a hardened deployment candidate, not a formally certified or independently security-audited product. Run the full verification and operational checklist in `docs/PRODUCTION_READINESS.md` before handling real customer workloads. The included `DemoJobHandler` simulates work; real email, payment, report, or backup integrations must be implemented with provider-side idempotency.
+[![Typing SVG](https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&duration=3000&pause=1000&color=42A5F5&center=true&vCenter=true&width=750&lines=Reliable+Background+Job+Processing;Concurrent+Workers+%26+Distributed+Coordination;Retries%2C+Leases+%26+Crash+Recovery;Built+with+Java+21+%26+Spring+Boot)](https://git.io/typing-svg)
 
-## Features
+![Java](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.2-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Maven](https://img.shields.io/badge/Maven-Build-C71A36?style=for-the-badge&logo=apachemaven&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI%2FCD-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-Monitoring-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-Dashboards-F46800?style=for-the-badge&logo=grafana&logoColor=white)
 
-- REST API to create, inspect, cancel, list, and replay jobs.
-- PostgreSQL as the durable source of truth; Flyway schema migrations.
-- Priority-based claiming with `FOR UPDATE SKIP LOCKED`.
-- Multiple concurrent workers.
-- Exponential retry delay with jitter and a dead-letter state.
-- Worker leases, heartbeats, fencing versions, and expired-lease recovery.
-- Idempotency keys with request-payload conflict detection and a unique database index.
-- Delayed execution using `scheduledAt`.
-- Redis Lua token bucket rate limiter (fail-closed if Redis is unavailable).
-- API-key authentication, request validation, bounded pagination.
-- Actuator health and Prometheus metrics on a separate management port.
-- Docker Compose, Grafana dashboard, CI workflow, backup/restore scripts.
+### 🚀 [GitHub Repository](https://github.com/Adarsh705875/QueueForge)
 
-## Requirements
+</div>
 
-- Java 21 for local execution.
-- Docker Desktop / Docker Engine with Compose v2 for the complete stack.
-- Internet access on first build to download Maven dependencies and container images.
+> ⚠️ **Disclaimer:** QueueForge is an independent software engineering project demonstrating distributed background job processing concepts. It is a development and production-oriented candidate, not a certified production service. Deployment security, infrastructure configuration, load testing, and operational validation are required before using it for critical workloads.
 
-## Quick start (Docker Compose)
+---
 
-1. Copy `.env.example` to `.env`.
-2. Generate strong values. Example on macOS/Linux:
+## 📸 Preview
 
-   ```bash
-   openssl rand -hex 32
-   ```
+<!-- Add screenshots of your monitoring dashboard, API tests and Docker services here -->
 
-   Use separate generated values for `DB_PASSWORD`, `REDIS_PASSWORD`, `QUEUEFORGE_API_KEY`, and `GRAFANA_ADMIN_PASSWORD`. Do not commit `.env`.
-3. Load the environment variables into your shell when you want to run the sample curl commands:
+---
 
-   ```bash
-   set -a; source .env; set +a
-   ./scripts/check-env.sh
-   ```
+## 📖 Overview
 
-4. Start the stack:
+**QueueForge** is a distributed background job processing system built using **Java 21, Spring Boot, PostgreSQL and Redis**.
 
-   ```bash
-   docker compose up --build -d
-   docker compose ps
-   docker compose logs -f app
-   ```
-5. Health endpoint (management port is internal to the Compose network):
+It provides a backend infrastructure for applications that need to execute time-consuming tasks asynchronously instead of blocking the main application request.
 
-   ```bash
-   docker compose exec app curl -fsS http://localhost:8081/actuator/health
-   ```
-6. API is bound to `127.0.0.1:8080` by default. Send `X-API-Key` with every API request:
+For example, an application might need to send emails, process uploaded files, generate reports, execute scheduled operations, or perform other background tasks.
 
-   ```bash
-   curl -i -X POST http://127.0.0.1:8080/api/v1/jobs \
-     -H "X-API-Key: $QUEUEFORGE_API_KEY" \
-     -H "Idempotency-Key: welcome-email-user-123" \
-     -H 'Content-Type: application/json' \
-     -d '{"jobType":"SEND_EMAIL","payload":"welcome-user-123","priority":8,"maxAttempts":5}'
-   ```
+Instead of executing these tasks directly during an API request, the application submits a job to QueueForge. The job is stored in PostgreSQL and processed asynchronously by available workers.
 
-   Repeating the exact request with the same key returns the original job. Reusing the key with a different request returns HTTP 409.
+QueueForge focuses on reliability, concurrent execution, job recovery, controlled retries and distributed coordination.
 
-7. Monitoring is available on localhost only:
-   - Prometheus: http://127.0.0.1:9090
-   - Grafana: http://127.0.0.1:3000 (credentials from `.env`)
+**Core workflow:**
 
-## Local development
+1. An application submits a background job through the REST API.
+2. QueueForge validates and authenticates the request.
+3. The job is stored persistently in PostgreSQL.
+4. Available workers claim eligible jobs.
+5. Workers execute jobs concurrently.
+6. Failed jobs can be retried according to configured policies.
+7. Leases and heartbeats help detect workers that stop responding.
+8. Monitoring components expose application metrics.
 
-For a local Maven process using the Compose-managed dependencies, start them with `docker compose up -d postgres redis`, then source `.env` and run the app with these local connection settings:
+**Example use cases:**
 
-```bash
-set -a; source .env; set +a
-export DB_URL=jdbc:postgresql://localhost:${POSTGRES_HOST_PORT:-5433}/queueforge
-export REDIS_HOST=localhost
-export REDIS_PORT=${REDIS_HOST_PORT:-6380}
-./mvnw spring-boot:run
-```
+- Sending emails and notifications
+- Processing uploaded files
+- Generating reports
+- Running scheduled tasks
+- Executing data-processing jobs
+- Handling asynchronous application workflows
 
-Alternatively, use your own local PostgreSQL and Redis instances with the connection settings in `application.properties`.
+---
 
-The existing PostgreSQL connection defaults match the original local QueueForge database. Back it up before the first Flyway migration. If you switch to the new Compose-managed database, follow `docs/MIGRATION.md` to preserve existing jobs.
+## ✨ Features
 
-Local defaults are intentionally development-only. The default local API key is `local-development-only-key-change-before-deployment-123456789`; override it with `QUEUEFORGE_API_KEY`. Do not use defaults in production.
-
-## API
-
-All `/api/v1/**` endpoints require `X-API-Key`.
-
-| Method | Endpoint | Purpose |
+| | Feature | Details |
 |---|---|---|
-| POST | `/api/v1/jobs` | Create or idempotently retrieve a job |
-| GET | `/api/v1/jobs/{id}` | Get job status |
-| GET | `/api/v1/jobs?page=0&size=20` | Paginated jobs |
-| PATCH | `/api/v1/jobs/{id}/cancel` | Cancel a queued job |
-| GET | `/api/v1/jobs/dead` | List dead-letter jobs |
-| POST | `/api/v1/jobs/{id}/replay` | Replay a dead-letter job |
-| GET | `/api/v1/system/status` | Application status |
+| ⚙️ | **Background Job Processing** | Submit and execute jobs asynchronously through a REST API |
+| 🧵 | **Concurrent Workers** | Multiple workers process eligible jobs using configurable concurrency |
+| 🗄️ | **Persistent Job Storage** | PostgreSQL stores job state and execution information |
+| 🔁 | **Automatic Retries** | Failed jobs can be retried with exponential backoff and jitter |
+| ⏱️ | **Delayed Jobs** | Schedule jobs for execution at a future time |
+| 🚦 | **Priority Queue** | Assign priorities to jobs to influence processing order |
+| 🔐 | **API Key Authentication** | Protect API access using configured API credentials |
+| ♻️ | **Idempotency** | Idempotency keys and request hashes help prevent duplicate submissions |
+| ❤️ | **Worker Heartbeats** | Workers periodically report that they are still active |
+| 🔒 | **Job Leases** | Temporary ownership of jobs helps coordinate concurrent workers |
+| 🛡️ | **Fencing Tokens** | Lease versions help prevent stale workers from updating reclaimed jobs |
+| 🚨 | **Crash Recovery** | Expired processing leases can be detected and jobs recovered |
+| ☠️ | **Dead Letter Queue** | Jobs that exhaust their retry policy can be moved to a dead-letter state |
+| 🔄 | **DLQ Replay** | Supports replaying dead-letter jobs |
+| ⚡ | **Redis Rate Limiting** | Redis-backed token-bucket rate limiting using Lua |
+| 📊 | **Prometheus Metrics** | Exposes metrics for application monitoring |
+| 📈 | **Grafana Dashboards** | Provides a dashboard environment for observing system metrics |
+| 🐳 | **Docker Compose** | Runs the application and supporting infrastructure as containers |
+| 🧪 | **Automated Tests** | Maven-based automated test suite |
+| 🔄 | **GitHub Actions CI** | Automatically builds and tests the project on GitHub |
 
-Job creation fields:
+---
 
-- `jobType`: required, up to 100 characters.
-- `payload`: required, up to 64 KB. Do not put passwords, tokens, or payment secrets in payloads.
-- `priority`: 1–10; defaults to 5.
-- `maxAttempts`: 1–20; defaults to 5.
-- `scheduledAt`: optional ISO date-time interpreted as UTC, e.g. `2026-12-01T10:30:00` (the API currently accepts a timezone-free ISO value; clients must send UTC).
+## 🏗️ System Architecture
 
-Rate limiting is applied to job submission per API key. Defaults: bucket capacity 100, refill 10 tokens/second. Configure `RATE_LIMIT_CAPACITY` and `RATE_LIMIT_REFILL_PER_SECOND`.
-
-## Tests and build
-
-```bash
-./mvnw clean verify
+```mermaid
+flowchart TB
+    A[👤 Client Application] -->|REST API Request| B[🔐 Spring Boot API]
+    B --> C[API Key Authentication]
+    C --> D[⚡ Redis Rate Limiter]
+    D --> E[📋 Job Management]
+    E --> F[(🐘 PostgreSQL)]
+    
+    F --> G[🧵 Worker Pool]
+    G --> H[Job Execution]
+    
+    H -->|Success| I[✅ Completed]
+    H -->|Failure| J[🔁 Retry Scheduler]
+    J --> F
+    
+    G --> K[❤️ Heartbeat & Lease Manager]
+    K --> F
+    
+    F --> L[☠️ Dead Letter Queue]
+    L --> M[🔄 Job Replay]
+    
+    N[📊 Prometheus] --> B
+    N --> O[📈 Grafana]
 ```
 
-The test profile uses H2 and disables background workers. The production PostgreSQL migration, Redis Lua script, container image, and deployment behavior must additionally be verified in a Docker-enabled environment. See `docs/PRODUCTION_READINESS.md`.
+### How it works
 
-## Important delivery semantics
+**1. Job Submission**
 
-QueueForge provides **at-least-once execution**, not exactly-once side effects. A worker can perform an external side effect and crash before marking the job complete. Job handlers must therefore use a stable business idempotency key with the downstream provider or their own transactional deduplication table. The database lease fencing token prevents stale workers from changing QueueForge's job state; it cannot undo or fence an external API call unless that downstream system supports it.
+A client application sends a job request to the QueueForge REST API. The application validates the request, applies authentication and rate-limiting rules, and stores the job.
 
-## Security and operations
+**2. Job Persistence**
 
-- Use a unique API key and strong database/Redis/Grafana passwords.
-- Terminate TLS at a trusted reverse proxy or load balancer.
-- Keep PostgreSQL, Redis, and management port 8081 private.
-- Restrict access to Prometheus and Grafana; they are bound to localhost in the provided Compose file.
-- Use encrypted off-host backups and regularly test restores.
-- Configure alerting, log retention, secret rotation, patching, and an incident response process.
-- Read `docs/SECURITY.md` and `docs/PRODUCTION_READINESS.md` before deployment.
+PostgreSQL acts as the durable job store. Job information includes execution status, attempts, priority, scheduling information, error details and worker lease information.
+
+**3. Worker Execution**
+
+The worker pool continuously looks for eligible jobs. Workers claim jobs and execute them independently, allowing multiple jobs to run concurrently.
+
+**4. Retry Management**
+
+When a job fails, the retry policy determines whether it can be executed again. Exponential backoff and jitter help avoid repeated retry spikes.
+
+**5. Lease and Heartbeat Management**
+
+A worker receives temporary ownership of a job. Heartbeats help maintain that ownership. If the worker disappears and the lease expires, the system can recover the job for another execution attempt.
+
+**6. Dead Letter Queue**
+
+Jobs that exceed their configured retry limit can be moved to a dead-letter state. These jobs can be inspected and replayed when appropriate.
+
+**7. Monitoring**
+
+Prometheus collects application metrics, while Grafana provides a dashboard environment to visualize system behavior.
+
+---
+
+## 🧰 Tech Stack
+
+| Layer | Technology | Purpose |
+|---|---|---|
+| Language | Java 21 | Main application language |
+| Backend Framework | Spring Boot 4.1.2 | Application framework |
+| Web Layer | Spring MVC | REST API |
+| Persistence | Spring Data JPA | Database interaction |
+| Database | PostgreSQL 16 | Durable job storage |
+| Database Migration | Flyway | Versioned database schema migrations |
+| Cache / Coordination | Redis 7 | Rate limiting and fast coordination |
+| Rate Limiting | Redis Lua | Atomic token-bucket operations |
+| Security | Spring Security | API authentication |
+| Validation | Jakarta Validation | Request validation |
+| Monitoring | Spring Boot Actuator | Health and application metrics |
+| Metrics | Micrometer + Prometheus | Metrics collection |
+| Dashboards | Grafana | Monitoring visualization |
+| Build Tool | Maven | Dependency and build management |
+| Testing | JUnit, Mockito, H2 | Automated tests |
+| Containerization | Docker | Application packaging |
+| Orchestration | Docker Compose | Local multi-service deployment |
+| CI | GitHub Actions | Automated build and test workflow |
+
+---
+
+## 📁 Project Structure
+
+```text
+QueueForge/
+│
+├── .github/
+│   └── workflows/
+│       └── ci.yml                 # GitHub Actions CI workflow
+│
+├── docs/                          # Project documentation
+│
+├── load-tests/                    # Load-testing resources
+│
+├── monitoring/
+│   ├── prometheus/                 # Prometheus configuration
+│   └── grafana/                    # Grafana provisioning and dashboards
+│
+├── scripts/
+│   ├── check-env.sh                # Environment configuration validation
+│   ├── backup.sh                   # Database backup utility
+│   └── restore.sh                  # Database restore utility
+│
+├── src/
+│   ├── main/
+│   │   ├── java/
+│   │   │   └── com/queueforge/     # Application source code
+│   │   └── resources/
+│   │       ├── db/
+│   │       │   └── migration/      # Flyway SQL migrations
+│   │       ├── application.properties
+│   │       └── application-prod.properties
+│   │
+│   └── test/
+│       ├── java/                   # Automated tests
+│       └── resources/              # Test configuration
+│
+├── .dockerignore                   # Docker build exclusions
+├── .env.example                    # Environment variable template
+├── .gitignore                      # Git exclusions
+├── compose.yaml                    # Multi-container configuration
+├── Dockerfile                      # Application container build
+├── HELP.md                         # Spring Boot project help
+├── mvnw                            # Maven wrapper (Unix/macOS)
+├── mvnw.cmd                        # Maven wrapper (Windows)
+├── pom.xml                         # Maven dependencies and build config
+└── README.md                       # Project documentation
+```
+
+**Important:** The tree shows the project organization and key paths. Generated files, Maven build output (`target/`), and local environment files are intentionally not part of the source-code structure.
+
+---
+
+## 🔄 Job Lifecycle
+
+A job moves through different execution states during its lifecycle.
+
+```mermaid
+stateDiagram-v2
+    [*] --> QUEUED
+    QUEUED --> PROCESSING
+    PROCESSING --> COMPLETED
+    PROCESSING --> RETRY_WAIT: Execution Failed
+    RETRY_WAIT --> QUEUED: Retry Eligible
+    PROCESSING --> DEAD_LETTER: Retry Limit Reached
+    DEAD_LETTER --> QUEUED: Replay
+    COMPLETED --> [*]
+```
+
+| State | Description |
+|---|---|
+| `QUEUED` | Job is waiting to be processed |
+| `PROCESSING` | A worker has claimed the job |
+| `RETRY_WAIT` | Job is waiting for its next retry |
+| `COMPLETED` | Job execution succeeded |
+| `DEAD_LETTER` | Job exhausted its retry policy |
+
+The exact state transitions depend on the configured retry and recovery policies.
+
+---
+
+## 🛡️ Reliability and Distributed Processing
+
+### 1. Retry Mechanism
+
+When a job execution fails, QueueForge can retry it based on its configured retry policy.
+
+The retry delay follows an exponential backoff strategy with jitter.
+
+```text
+Retry 1 → Short delay
+Retry 2 → Longer delay
+Retry 3 → Longer delay
+Retry N → Maximum configured retry delay
+```
+
+Jitter helps reduce synchronized retry spikes when multiple jobs fail around the same time.
+
+### 2. Worker Leases
+
+Workers claim jobs using temporary leases.
+
+A lease records which worker currently owns a job and when that ownership expires.
+
+This helps the system identify jobs that may have been abandoned because a worker crashed or stopped responding.
+
+### 3. Heartbeats
+
+Workers periodically update their heartbeat information to indicate that they are still active.
+
+If a heartbeat stops and the lease expires, the recovery mechanism can make the job eligible for processing again.
+
+### 4. Fencing Tokens
+
+Lease versions provide a mechanism for distinguishing newer job ownership from stale ownership.
+
+This helps protect job state from updates made by workers whose leases are no longer valid.
+
+### 5. Idempotency
+
+Idempotency keys and request hashes help identify duplicate submissions.
+
+This is especially useful when clients retry requests because of network failures or uncertain responses.
+
+### 6. Dead Letter Queue
+
+Jobs that cannot complete after their retry attempts can be moved to the dead-letter queue.
+
+This separates repeatedly failing jobs from normal processing and provides a mechanism for inspection and replay.
+
+> **Note:** Retrying a job can result in the underlying task executing more than once. External side effects should use idempotent operations or their own deduplication mechanisms.
+
+---
+
+## ⚙️ Configuration
+
+QueueForge uses environment variables to configure infrastructure, security, worker execution and rate limiting.
+
+Create a
