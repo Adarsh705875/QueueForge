@@ -1,0 +1,16 @@
+{
+  "uid": "queueforge-overview",
+  "title": "QueueForge Overview",
+  "tags": ["queueforge", "jobs"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "panels": [
+    {"id": 1, "type": "stat", "title": "Queued Jobs", "gridPos": {"h": 5, "w": 6, "x": 0, "y": 0}, "targets": [{"expr": "queueforge_jobs_queued", "refId": "A"}]},
+    {"id": 2, "type": "stat", "title": "Processing Jobs", "gridPos": {"h": 5, "w": 6, "x": 6, "y": 0}, "targets": [{"expr": "queueforge_jobs_processing", "refId": "A"}]},
+    {"id": 3, "type": "stat", "title": "Dead Jobs", "gridPos": {"h": 5, "w": 6, "x": 12, "y": 0}, "targets": [{"expr": "queueforge_jobs_dead", "refId": "A"}]},
+    {"id": 4, "type": "timeseries", "title": "Job Throughput", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 5}, "targets": [{"expr": "rate(queueforge_jobs_completed_total[5m])", "legendFormat": "completed/sec", "refId": "A"}, {"expr": "rate(queueforge_jobs_failed_total[5m])", "legendFormat": "failed/sec", "refId": "B"}]},
+    {"id": 5, "type": "timeseries", "title": "Recovered Jobs", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 5}, "targets": [{"expr": "increase(queueforge_jobs_recovered_total[1h])", "legendFormat": "recovered/hour", "refId": "A"}]}
+  ]
+}

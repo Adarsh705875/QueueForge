@@ -1,0 +1,23 @@
+name: QueueForge CI
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Run tests
+        run: ./mvnw -B clean verify
+      - name: Build container image
+        run: docker build -t queueforge:${{ github.sha }} .
